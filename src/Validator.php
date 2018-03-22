@@ -98,8 +98,10 @@ class Validator implements ValidatorInterface
     public function run(ValidatableInterface $request = null): ValidatorInterface
     {
         $autoValidate = false;
-        if (!count($this->rules) && null !== $request) {
-            $this->rules = $request->getValidationRules();
+        if (null !== $request) {
+            $this->rules = empty($this->rules)
+                ? $request->getValidationRules()
+                : array_merge($this->rules, $request->getValidationRules());
             $autoValidate = $request->autoValidate();
         }
 
