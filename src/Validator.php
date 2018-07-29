@@ -2,6 +2,7 @@
 
 namespace VS\Validator;
 
+use VS\General\DIFactory;
 use VS\Request\RequestInterface;
 
 /**
@@ -11,6 +12,10 @@ use VS\Request\RequestInterface;
  */
 class Validator implements ValidatorInterface
 {
+    /**
+     * @var bool $ownRule
+     */
+    protected $ownRule = true;
     /**
      * @var array $attributes
      */
@@ -90,6 +95,17 @@ class Validator implements ValidatorInterface
     }
 
     /**
+     * @param string $name
+     * @param $value
+     * @return ValidatorInterface
+     */
+    public function setAttribute(string $name, $value): ValidatorInterface
+    {
+        $this->attributes[":{$name}"] = $value;
+        return $this;
+    }
+
+    /**
      * @param ValidatableInterface|null $request
      * @return ValidatorInterface
      * @throws ValidatorException
@@ -108,7 +124,10 @@ class Validator implements ValidatorInterface
         $this->prepareValidation();
 
         if ($autoValidate && !$this->isValid()) {
-            //TODO::Add logic to do some action for auto Validatable objects
+            $autoValidateCallback = ValidatorConstants::getAutovalidate();
+            if (null !== $autoValidateCallback) {
+                return DIFactory::injectFunction($autoValidateCallback);
+            }
         }
         return $this;
     }
@@ -401,12 +420,18 @@ class Validator implements ValidatorInterface
      */
     protected function validateRule(string $ruleName)
     {
-        if (!method_exists($this, $ruleName)) {
-            throw new ValidatorException(sprintf(
-                ValidatorConstants::getMessage(ValidatorConstants::INVALID_RULE_CODE),
-                $ruleName
-            ), ValidatorConstants::INVALID_RULE_CODE);
+        if (method_exists($this, $ruleName)) {
+            $this->ownRule = true;
+            return;
+        } elseif (ValidatorConstants::isValidRule($ruleName)) {
+            $this->ownRule = false;
+            return;
         }
+
+        throw new ValidatorException(sprintf(
+            ValidatorConstants::getMessage(ValidatorConstants::INVALID_RULE_CODE),
+            $ruleName
+        ), ValidatorConstants::INVALID_RULE_CODE);
     }
 
     /**
@@ -418,8 +443,25 @@ class Validator implements ValidatorInterface
         $argument = null;
 
         if (strpos($rule, ':') !== FALSE) {
-            [$ruleName, $argument] = explode(':', $rule);
-            $argument = str_replace(['[', ']'], '', $argument);
+            $partials = explode(':', $rule);
+
+            if (isset($partials[2])) {
+                [$ruleName, $argument, $details] = $partials;
+                $details = str_replace(['[', ']'], '', $details);
+                if (strpos($details, ',') !== FALSE) {
+                    $details = explode(',', $details);
+                }
+                $argument = [
+                    str_replace('[', '', $argument),
+                    $details
+                ];
+            } else {
+                [$ruleName, $argument] = $partials;
+                if (\is_string($argument)) {
+                    $argument = str_replace(['[', ']'], '', $argument);
+                }
+            }
+
         } else {
             $ruleName = $rule;
         }
@@ -445,7 +487,7 @@ class Validator implements ValidatorInterface
      * @param array $rules
      * @throws ValidatorException
      */
-    private function validate(string $fieldName, string $label, array $rules)
+    protected function validate(string $fieldName, string $label, array $rules)
     {
         $this->trim = !in_array('!trim', $rules, true);
         $checkReverse = false;
@@ -459,7 +501,16 @@ class Validator implements ValidatorInterface
             $this->validateRule($ruleName);
 
             $this->values[$fieldName] = $value;
-            $result = $checkReverse ? $this->{$ruleName}($value, $argument) : !$this->{$ruleName}($value, $argument);
+            if (!is_array($argument)) {
+                $argument = [$argument];
+            }
+
+            if ($this->ownRule) {
+                $result = $checkReverse ? $this->{$ruleName}($value, ...$argument) : !$this->{$ruleName}($value, ...$argument);
+            } else {
+                $callable = ValidatorConstants::getRule($ruleName);
+                $result = $checkReverse ? $callable($this, $value, ...$argument) : !$callable($this, $value, ...$argument);
+            }
 
             if ($result) {
                 $this->resolveResult($ruleName, $label, $fieldName, $checkReverse);

@@ -64,6 +64,82 @@ class ValidatorConstants
     protected static $validationMessages = [];
 
     /**
+     * @var callable|null $autovalidate
+     */
+    protected static $autovalidate;
+
+    /**
+     * @var array $rules
+     */
+    protected static $rules = [];
+
+    /**
+     * @param callable|null $autovalidate
+     */
+    public static function setAutovalidate(?callable $autovalidate): void
+    {
+        self::$autovalidate = $autovalidate;
+    }
+
+    /**
+     * @return callable|null
+     */
+    public static function getAutovalidate(): ?callable
+    {
+        return self::$autovalidate;
+    }
+
+    /**
+     * @param array $rules
+     */
+    public static function setRules(array $rules): void
+    {
+        self::$rules = $rules;
+    }
+
+    /**
+     * @param string $name
+     * @param callable $implementation
+     */
+    public static function addRule(string $name, callable $implementation): void
+    {
+        self::$rules[$name] = $implementation;
+    }
+
+    /**
+     * @return array
+     */
+    public static function getRules(): array
+    {
+        return self::$rules;
+    }
+
+    /**
+     * @param string $name
+     * @return callable
+     */
+    public static function getRule(string $name): callable
+    {
+        if (empty(static::$rules[$name]) || !is_callable(static::$rules[$name])) {
+            throw new \InvalidArgumentException(sprintf(
+                'Rule %s dose not exists or is not a callbale',
+                $name
+            ));
+        }
+
+        return static::$rules[$name];
+    }
+
+    /**
+     * @param string $name
+     * @return bool
+     */
+    public static function isValidRule(string $name): bool
+    {
+        return !empty(static::$rules[$name]) && is_callable(static::$rules[$name]);
+    }
+
+    /**
      * @param array $messages
      * @param string $lang
      */

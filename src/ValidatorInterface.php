@@ -10,6 +10,13 @@ namespace VS\Validator;
 interface ValidatorInterface
 {
     /**
+     * @param string $name
+     * @param $value
+     * @return ValidatorInterface
+     */
+    public function setAttribute(string $name, $value): ValidatorInterface;
+
+    /**
      * @param string $lang
      * @return void
      */
