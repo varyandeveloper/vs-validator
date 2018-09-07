@@ -39,9 +39,9 @@ interface ValidatorInterface
 
     /**
      * @param ValidatableInterface|null $request
-     * @return ValidatorInterface
+     * @return mixed
      */
-    public function run(ValidatableInterface $request = null): ValidatorInterface;
+    public function run(ValidatableInterface $request = null);
 
     /**
      * @return array

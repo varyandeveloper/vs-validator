@@ -48,6 +48,14 @@ class Validator implements ValidatorInterface
      * @var string $lang
      */
     private static $lang = 'en';
+    /**
+     * @var bool
+     */
+    private $required = false;
+    /**
+     * @var mixed
+     */
+    private $value;
 
     /**
      * Validator constructor.
@@ -107,11 +115,12 @@ class Validator implements ValidatorInterface
 
     /**
      * @param ValidatableInterface|null $request
-     * @return ValidatorInterface
+     * @return $this|mixed|ValidatorInterface
      * @throws ValidatorException
-     * @throws \Exception
+     * @throws \ReflectionException
+     * @throws \VS\General\Exceptions\ClassNotFoundException
      */
-    public function run(ValidatableInterface $request = null): ValidatorInterface
+    public function run(ValidatableInterface $request = null)
     {
         $autoValidate = false;
         if (null !== $request) {
@@ -126,7 +135,7 @@ class Validator implements ValidatorInterface
         if ($autoValidate && !$this->isValid()) {
             $autoValidateCallback = ValidatorConstants::getAutovalidate();
             if (null !== $autoValidateCallback) {
-                return DIFactory::injectFunction($autoValidateCallback);
+                return DIFactory::injectFunction($autoValidateCallback, $this);
             }
         }
         return $this;
@@ -236,6 +245,9 @@ class Validator implements ValidatorInterface
     public function email($value): bool
     {
         $this->type = 'string';
+        if (empty($value)) {
+            return false;
+        }
         return filter_var($value, FILTER_VALIDATE_EMAIL) !== FALSE || empty($value);
     }
 
@@ -407,10 +419,12 @@ class Validator implements ValidatorInterface
             $ruleName = "!$ruleName";
         }
 
-        if (isset($messages[$ruleName])) {
-            $this->errors[$fieldName] = str_replace(array_keys($this->attributes), array_values($this->attributes), $messages[$ruleName]);
-        } else {
-            $this->errors[$fieldName] = $ruleName;
+        if ($this->required || !empty($this->value)) {
+            if (isset($messages[$ruleName])) {
+                $this->errors[$fieldName] = str_replace(array_keys($this->attributes), array_values($this->attributes), $messages[$ruleName]);
+            } else {
+                $this->errors[$fieldName] = $ruleName;
+            }
         }
     }
 
@@ -500,9 +514,13 @@ class Validator implements ValidatorInterface
             $this->resolveRuleNameAndRevers($ruleName, $checkReverse);
             $this->validateRule($ruleName);
 
-            $this->values[$fieldName] = $value;
+            $this->value = $value;
             if (!is_array($argument)) {
                 $argument = [$argument];
+            }
+
+            if ($ruleName === 'required') {
+                $this->required = true;
             }
 
             if ($this->ownRule) {
@@ -515,6 +533,8 @@ class Validator implements ValidatorInterface
             if ($result) {
                 $this->resolveResult($ruleName, $label, $fieldName, $checkReverse);
                 break;
+            } else {
+                $this->values[$fieldName] = $value;
             }
         }
     }
